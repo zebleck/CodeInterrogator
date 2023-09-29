@@ -1,0 +1,6 @@
+.venv
+.streamlit
+storage
+.env
+DocScraper/*/
+DocScraper/*.zip
