@@ -7,6 +7,7 @@ from llama_index.indices.document_summary import DocumentSummaryIndex, DocumentS
 from llama_index.llms import OpenAI
 from llama_index.query_engine import RetrieverQueryEngine
 import openai
+import json
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 logger = logging.getLogger()
@@ -105,3 +106,13 @@ if st.session_state.messages[-1]["role"] != "assistant":
 			st.write(f"{response.response}")
 			logging.info(response)
 			st.session_state.messages.append({"role": "assistant", "content": response.response})
+
+# Button to export chat log
+if st.button('Export Chat Log'):
+    chat_log_str = json.dumps(st.session_state.messages, indent=4)
+    st.download_button(
+        label="Download Chat Log",
+        data=chat_log_str,
+        file_name="chat_log.json",
+        mime="application/json",
+    )
