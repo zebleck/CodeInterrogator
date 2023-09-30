@@ -9,6 +9,12 @@ from llama_index.query_engine import RetrieverQueryEngine
 import openai
 import json
 import nest_asyncio
+from llama_index.embeddings import HuggingFaceEmbedding
+from llama_index import ServiceContext, set_global_service_context
+from llama_index.llms import OpenAI
+from llama_index.embeddings import OpenAIEmbedding, HuggingFaceEmbedding
+from llama_index.node_parser import SentenceWindowNodeParser
+from llama_index.indices.postprocessor import MetadataReplacementPostProcessor
 
 nest_asyncio.apply()
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
@@ -45,52 +51,39 @@ def load_data():
 		logging.info(f"Loaded index: {index}")
 		return index
 	except Exception as e:
-		SUMMARY_QUERY = (
-			"Describe what the provided text or code snippet is about. "
-			"You are working on a code project in dynamical systems reconstruction."
-			"Also describe some of the questions that can answered about the topic or project with this text."
-		)
-		
-		logging.info(f"Could not load index: {e}\nCreating index with summary query: {SUMMARY_QUERY}")
+		logging.info(f"Could not load index: {e}")
 
+		node_parser = SentenceWindowNodeParser.from_defaults(
+			window_size=3,
+			window_metadata_key="window",
+			original_text_metadata_key="original_text",
+		)
+		llm = OpenAI(model="gpt-3.5-turbo", temperature=0.1)
+		ctx = ServiceContext.from_defaults(
+			llm=llm,
+			embed_model=OpenAIEmbedding(embed_batch_size=5),
+            node_parser=node_parser
+		)
+		logging.info(f"Loading documents.")
 		documents = SimpleDirectoryReader(folder_path, recursive=True).load_data()
-		service_context = ServiceContext.from_defaults(llm=OpenAI(temperature=0, model="gpt-4"), chunk_size=2048)#, temperature=0.5, system_prompt="You are an expert on the LLama index Python library and your job is to answer technical questions. Assume that all questions are related to the LLama index Python library. Keep your answers technical and based on facts – do not hallucinate features."))
+		logging.info(f"Creating index.")
+		sentence_index = VectorStoreIndex.from_documents(documents, service_context=ctx)
 
-		#index = VectorStoreIndex.from_documents(documents, service_context=service_context)
-		response_synthesizer = get_response_synthesizer(
-			response_mode="tree_summarize", use_async=True
-		)
-		index = DocumentSummaryIndex.from_documents(
-			documents,
-			service_context=service_context,
-			response_synthesizer=response_synthesizer,
-            summary_query=SUMMARY_QUERY
-		)
-		index.set_index_id(index_name)
-		index.storage_context.persist(f"./storage/{index_name}")
-		logging.info(f"Created index: {index}")
-		return index
+		sentence_index.set_index_id(index_name)
+		sentence_index.storage_context.persist(f"./storage/{index_name}")
+		logging.info(f"Created index: {sentence_index}")
+		return sentence_index
 
 index = load_data()
 
-# Define chat engine
-#mode = st.selectbox("Select query mode", ["condense_question", "best", "context", "simple", "react", "openai"])
-#chat_engine = index.as_chat_engine(chat_mode=mode, verbose=True)
+similarity_top_k = st.number_input('Select the number of similar nodes to retrieve', min_value=1, max_value=100, value=2)
 
-response_mode = st.selectbox("Select response mode", ["refine", "compact", "tree_summarize", "simple_summarize", "no_text", "accumulate", "compact_accumulate"])
-
-choice_batch_size = st.number_input('Select the number of similar nodes to retrieve', min_value=1, max_value=100, value=10)
-
-#query_engine = index.as_query_engine(response_mode=response_mode)#, similarity_top_k=similarity_top_k, verbose=True)
-retriever = DocumentSummaryIndexRetriever(index, choice_batch_size=choice_batch_size, response_mode=response_mode, verbose=True)
-retriever.service_context = ServiceContext.from_defaults(llm=OpenAI(temperature=0, model="gpt-4"), chunk_size=1024)
-
-response_synthesizer = get_response_synthesizer()
-
-# assemble query engine
-query_engine = RetrieverQueryEngine(
-    retriever=retriever,
-    response_synthesizer=response_synthesizer
+query_engine = index.as_query_engine(
+    similarity_top_k=similarity_top_k,
+    # the target key defaults to `window` to match the node_parser's default
+    node_postprocessors=[
+        MetadataReplacementPostProcessor(target_metadata_key="window")
+    ],
 )
 
 # Chat UI
@@ -114,9 +107,11 @@ if st.session_state.messages[-1]["role"] != "assistant":
 			#	st.write(f"#{i+1}<br>{r.node.get_text()}")
 			#	st.session_state.messages.append({"role": "assistant", "content": r.node.get_text()})
 			# if is error
-			logging.warn(response)
+			for i, source_node in enumerate(response.source_nodes):
+				if i == 0:
+					print(source_node)
+				st.write(i, "\n", source_node.node.metadata["original_text"])
 			st.write(f"{response.response}")
-			logging.info(response)
 			st.session_state.messages.append({"role": "assistant", "content": response.response})
 
 # Button to export chat log
