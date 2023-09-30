@@ -8,6 +8,9 @@ from llama_index.llms import OpenAI
 from llama_index.query_engine import RetrieverQueryEngine
 import openai
 import json
+import nest_asyncio
+
+nest_asyncio.apply()
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
 logger = logging.getLogger()
@@ -42,9 +45,16 @@ def load_data():
 		logging.info(f"Loaded index: {index}")
 		return index
 	except Exception as e:
-		logging.info(f"Could not load index: {e}\nCreating index...")
+		SUMMARY_QUERY = (
+			"Describe what the provided text or code snippet is about. "
+			"You are working on a code project in dynamical systems reconstruction."
+			"Also describe some of the questions that can answered about the topic or project with this text."
+		)
+		
+		logging.info(f"Could not load index: {e}\nCreating index with summary query: {SUMMARY_QUERY}")
+
 		documents = SimpleDirectoryReader(folder_path, recursive=True).load_data()
-		service_context = ServiceContext.from_defaults(llm=OpenAI(temperature=0, model="gpt-3.5-turbo"), chunk_size=1024)#, temperature=0.5, system_prompt="You are an expert on the LLama index Python library and your job is to answer technical questions. Assume that all questions are related to the LLama index Python library. Keep your answers technical and based on facts – do not hallucinate features."))
+		service_context = ServiceContext.from_defaults(llm=OpenAI(temperature=0, model="gpt-4"), chunk_size=2048)#, temperature=0.5, system_prompt="You are an expert on the LLama index Python library and your job is to answer technical questions. Assume that all questions are related to the LLama index Python library. Keep your answers technical and based on facts – do not hallucinate features."))
 
 		#index = VectorStoreIndex.from_documents(documents, service_context=service_context)
 		response_synthesizer = get_response_synthesizer(
@@ -54,6 +64,7 @@ def load_data():
 			documents,
 			service_context=service_context,
 			response_synthesizer=response_synthesizer,
+            summary_query=SUMMARY_QUERY
 		)
 		index.set_index_id(index_name)
 		index.storage_context.persist(f"./storage/{index_name}")
@@ -68,10 +79,11 @@ index = load_data()
 
 response_mode = st.selectbox("Select response mode", ["refine", "compact", "tree_summarize", "simple_summarize", "no_text", "accumulate", "compact_accumulate"])
 
-choice_batch_size = st.number_input('Select the number of similar nodes to retrieve', min_value=1, max_value=100, value=1)
+choice_batch_size = st.number_input('Select the number of similar nodes to retrieve', min_value=1, max_value=100, value=10)
 
 #query_engine = index.as_query_engine(response_mode=response_mode)#, similarity_top_k=similarity_top_k, verbose=True)
-retriever = DocumentSummaryIndexRetriever(index, choice_batch_size, response_mode=response_mode, verbose=True)
+retriever = DocumentSummaryIndexRetriever(index, choice_batch_size=choice_batch_size, response_mode=response_mode, verbose=True)
+retriever.service_context = ServiceContext.from_defaults(llm=OpenAI(temperature=0, model="gpt-4"), chunk_size=1024)
 
 response_synthesizer = get_response_synthesizer()
 
