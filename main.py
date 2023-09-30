@@ -67,10 +67,10 @@ index = load_data()
 
 response_mode = st.selectbox("Select response mode", ["refine", "compact", "tree_summarize", "simple_summarize", "no_text", "accumulate", "compact_accumulate"])
 
-similarity_top_k = st.number_input('Select the number of similar nodes to retrieve', min_value=1, max_value=100, value=5)
+choice_batch_size = st.number_input('Select the number of similar nodes to retrieve', min_value=1, max_value=100, value=1)
 
 #query_engine = index.as_query_engine(response_mode=response_mode)#, similarity_top_k=similarity_top_k, verbose=True)
-retriever = DocumentSummaryIndexRetriever(index, similarity_top_k=similarity_top_k, response_mode=response_mode, verbose=True)
+retriever = DocumentSummaryIndexRetriever(index, choice_batch_size, response_mode=response_mode, verbose=True)
 
 response_synthesizer = get_response_synthesizer()
 
