@@ -8,6 +8,9 @@ This project is a Streamlit app that serves as a question-answering system using
 * Index Persistence: Load and save Llama Indices for quicker future queries.
 * GPT-4 Assisted: Utilizes OpenAI's GPT-4 model for generating queries.
 
+| :warning:   | Using an OpenAI model for document embedding and querying may incur significant costs. |
+|---------------|:-------------------------|
+
 ## Installation
 ### Dependencies
 To install the required Python packages, run the following command:
