@@ -3,7 +3,7 @@ import os
 import sys
 import logging
 from llama_index import TreeIndex, SimpleDirectoryReader, StorageContext, get_response_synthesizer, load_index_from_storage, ServiceContext
-from llama_index.llms import OpenAI
+from llama_index.llms import OpenAI, ChatMessage
 from llama_index.query_engine import RetrieverQueryEngine
 from llama_index.text_splitter import CodeSplitter
 from llama_index.node_parser import SimpleNodeParser
@@ -70,6 +70,8 @@ index = load_data()
 
 response_mode = st.selectbox("Select chat mode", ["best", "context", "condense_question", "simple", "react", "openai"])
 
+include_history = st.checkbox("Include chat history", value=True)
+
 # assemble query engine
 chat_engine = index.as_chat_engine(chat_mode=response_mode, verbose=True)
 
@@ -98,8 +100,8 @@ if len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] 
 			# Initialize an empty string to hold the concatenated tokens
 			concatenated_response = ""
 
-			# Use stream_chat for streaming response
-			response = chat_engine.stream_chat(prompt)
+			chat_history = [ChatMessage(content=message["content"], role=message["role"]) for message in st.session_state.messages]
+			response = chat_engine.stream_chat(prompt, chat_history=chat_history if include_history else None)
 
 		message_placeholder = st.empty()
 		full_response = ""
